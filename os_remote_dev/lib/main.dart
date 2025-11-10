@@ -124,9 +124,7 @@ Future<void> _clearCredentials() async {
   await _secureStorage.deleteAll();
   setState(() {
     _isSignedIn = false;
-    _username = "";
     _password = "";
-    _host = "";
     _log = "Signed out.";
   });
 }
