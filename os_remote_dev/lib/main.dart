@@ -408,109 +408,122 @@ Widget _buildJsonConfigTab() {
   );
 }
 
+Widget _buildDevContainerTab() {
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --- Top Buttons ---
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
+                  description: "Starting Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text("Start Dev", textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker stop squirreldefender-dev",
+                  description: "Stopping Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text("Stop Dev", textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker rm -f squirreldefender-dev || true && docker system prune -f",
+                  description: "Deleting Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text("Del Dev", textAlign: TextAlign.center),
+              ),
+            ),
+          ],
+        ),
 
-  Widget _buildDevContainerTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
-                    description: "Starting Dev Container",
-                  ),
-                  style: _buttonStyle,
-                  child: const Text("Start Dev", textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+
+        // --- Run / Stop EXE Buttons ---
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
+                  description: "Run SquirrelDefender",
                 ),
+                style: _buttonStyle,
+                child: const Text("Run EXE", textAlign: TextAlign.center),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker stop squirreldefender-dev",
-                    description: "Stopping Dev Container",
-                  ),
-                  style: _buttonStyle,
-                  child: const Text("Stop Dev", textAlign: TextAlign.center),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                  description: "Stop SquirrelDefender",
                 ),
+                style: _buttonStyle,
+                child: const Text("Stop EXE", textAlign: TextAlign.center),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker rm -f squirreldefender-dev || true && docker system prune -f",
-                    description: "Deleting Dev Container",
-                  ),
-                  style: _buttonStyle,
-                  child: const Text("Del Dev", textAlign: TextAlign.center),
-                ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+        const Text("🖥️ Output / Terminal",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+
+        // --- Stable Full-Width Terminal ---
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 40),
+            child: Container(
+              width: double.infinity, // ✅ prevent narrowing
+              constraints: const BoxConstraints(
+                minHeight: 300, // ✅ keeps it tall even when log is short
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
-                    description: "Run SquirrelDefender",
-                  ),
-                  style: _buttonStyle,
-                  child: const Text("Run EXE", textAlign: TextAlign.center),
-                ),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade700),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
-                    description: "Stop SquirrelDefender",
-                  ),
-                  style: _buttonStyle,
-                  child: const Text("Stop EXE", textAlign: TextAlign.center),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text("🖥️ Output / Terminal",
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 30),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _logScrollController,
-                    child: Text(
-                      _log,
-                      style: const TextStyle(
-                        color: Colors.greenAccent,
-                        fontFamily: "monospace",
-                        fontSize: 13,
-                      ),
+              padding: const EdgeInsets.all(8),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _logScrollController,
+                  child: Text(
+                    _log.isEmpty
+                        ? "No output yet.\nTap “Run EXE” to begin..."
+                        : _log,
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontFamily: "monospace",
+                      fontSize: 13,
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   // --------------------------------------------------------------------------
   // UI
