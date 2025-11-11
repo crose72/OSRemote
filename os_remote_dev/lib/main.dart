@@ -32,6 +32,11 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
       "/home/$_username/workspaces/os-dev/OperationSquirrel/SquirrelDefender/params.json";
   String get _operationSquirrelPath =>
       "/home/$_username/workspaces/os-dev/OperationSquirrel/scripts/";
+  final _pathController = TextEditingController(
+    text: "/workspace/OperationSquirrel/SquirrelDefender/build",
+  );
+  final ScrollController _logScrollController = ScrollController();
+
 
   // --------------------------------------------------------------------------
   // Ask to log in to jetson
@@ -269,14 +274,15 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
         onPasswordRequest: () => _password,
       );
 
-      // --- Run command and capture output ---
+      // --- Run command and decode UTF-8 output ---
       final result = await client.run(cmd);
+      final decoded = utf8.decode(result);
 
       // --- Cleanup ---
-      client.close(); // no await here
-      socket.close(); // no await here
+      client.close();
+      socket.close();
 
-      setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$result");
+      setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$decoded");
     } catch (e, st) {
       debugPrint("Command failed: $e\n$st");
       setState(() => _log = "❌ Command failed: $e");
@@ -314,30 +320,86 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
                     onPressed: () => _execCommand(
                       "bash -c '$_operationSquirrelPath/run.sh dev orin'", // && docker exec -d squirreldefender-dev ./squirreldefender'",
                       // "bash -c '$_operationSquirrelPath/scripts/run.sh dev orin; docker exec -d squirreldefender-dev bash -lc \"cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender\"'",
-                      description: "Starting Dev Container + Program",
+                      description: "Starting Dev Container",
                     ),
                     child: const Text("Start Dev"),
                   ),
                 ),
-
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
                       "docker stop squirreldefender-dev", // "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
-                      description: "Stopping Program",
+                      description: "Stopping Dev Container",
                     ),
                     child: const Text("Stop Dev"),
                   ),
                 ),
-                  Expanded(
+                const SizedBox(width: 8),
+                Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
-                      "docker exec squirreldefender-dev ls -lh /workspace/OperationSquirrel/SquirrelDefender/build",
-                      description: "Listing contents of build folder",
+                      "docker rm -f squirreldefender-dev || true && docker system prune -f", // "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                      description: "Deleting Dev Container",
                     ),
-                    child: const Text("List Container Files"),
+                    child: const Text("Del Dev"),
                   ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                      "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
+                      description: "Run SquirrelDefender",
+                    ),
+                    child: const Text("Run EXE"),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                      "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                      description: "Stop SquirrelDefender",
+                    ),
+                    child: const Text("Stop EXE"),
+                  ),
+                ),
+              ],
+            ),
+
+            // --------------------------------------------------------------------------
+            // 🧰 Mini Terminal: Inspect container folders
+            // --------------------------------------------------------------------------
+            const SizedBox(height: 16),
+            const Text(
+              "📁 Inspect Container Folder",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _pathController,
+                    decoration: const InputDecoration(
+                      labelText: "Path inside container",
+                      hintText:
+                          "/workspace/OperationSquirrel/SquirrelDefender/build",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final path = _pathController.text.trim().isEmpty
+                        ? "/workspace/OperationSquirrel/SquirrelDefender/build"
+                        : _pathController.text.trim();
+                    _execCommand(
+                      "docker exec squirreldefender-dev ls -lh $path",
+                      description: "Listing files in $path",
+                    );
+                  },
+                  child: const Text("List Files"),
                 ),
               ],
             ),
@@ -376,10 +438,25 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: SingleChildScrollView(
-                child: Text(
-                  _log,
-                  style: const TextStyle(fontFamily: "monospace"),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _logScrollController,
+                    child: Text(
+                      _log,
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
