@@ -20,6 +20,12 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   final _controller = TextEditingController();
   String _log = "";
   bool _busy = false;
+  final ButtonStyle _buttonStyle = ElevatedButton.styleFrom(
+  minimumSize: const Size(0, 46), // consistent height, flexible width
+  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+  padding: const EdgeInsets.symmetric(horizontal: 12),
+);
+
 
   // --- Connection parameters ---
   final _secureStorage = const FlutterSecureStorage();
@@ -239,7 +245,8 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
       final result = await client.run(
         'ls -lh $_squirrelDefenderParams || echo "Missing file"',
       );
-      setState(() => _log = "✅ Done!\n\n$result");
+      final decoded = utf8.decode(result); // 👈 decode bytes to readable text
+      setState(() => _log = "✅ Done!\n\n$decoded");
 
       // --- Clean up ---
       sftp.close();
@@ -288,131 +295,178 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
     }
   }
 
-  Widget _buildJsonConfigTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _busy ? null : _downloadConfig,
-                  // style: ElevatedButton.styleFrom(
-                  //   textStyle: const TextStyle(fontSize: 12),
-                  // ),
-                  child: const Text("Download"),
+Widget _buildJsonConfigTab() {
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _downloadConfig,
+                style: _buttonStyle,
+                child: const Text(
+                  "Download",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _busy ? null : _uploadConfig,
-                  child: Text(_busy ? "Working..." : "Upload"),
-                ),
-              ),
-              const SizedBox(width: 9),
-              ElevatedButton(
-                onPressed: _clearCredentials,
-                child: const Text("Sign Out"),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "✏️ Edit params.json",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: '{\n  "Kp": 0.5,\n  "Ki": 0.1\n}',
-              ),
-              style: const TextStyle(fontFamily: "monospace"),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _uploadConfig,
+                style: _buttonStyle,
+                child: Text(
+                  _busy ? "Working..." : "Upload",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _clearCredentials,
+              style: _buttonStyle,
+              child: const Text(
+                "Sign Out",
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.visible,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "✏️ Edit params.json",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: '{\n  "Kp": 0.5,\n  "Ki": 0.1\n}',
+            ),
+            style: const TextStyle(fontFamily: "monospace"),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
-  Widget _buildDevContainerTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
-                    description: "Starting Dev Container",
-                  ),
-                  child: const Text("Start Dev"),
+Widget _buildDevContainerTab() {
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
+                  description: "Starting Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text(
+                  "Start Dev",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker stop squirreldefender-dev",
-                    description: "Stopping Dev Container",
-                  ),
-                  child: const Text("Stop Dev"),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker stop squirreldefender-dev",
+                  description: "Stopping Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text(
+                  "Stop Dev",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker rm -f squirreldefender-dev || true && docker system prune -f",
-                    description: "Deleting Dev Container",
-                  ),
-                  child: const Text("Del Dev"),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker rm -f squirreldefender-dev || true && docker system prune -f",
+                  description: "Deleting Dev Container",
+                ),
+                style: _buttonStyle,
+                child: const Text(
+                  "Del Dev",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
-                    description: "Run SquirrelDefender",
-                  ),
-                  child: const Text("Run EXE"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
+                  description: "Run SquirrelDefender",
+                ),
+                style: _buttonStyle,
+                child: const Text(
+                  "Run EXE",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _execCommand(
-                    "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
-                    description: "Stop SquirrelDefender",
-                  ),
-                  child: const Text("Stop EXE"),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _execCommand(
+                  "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                  description: "Stop SquirrelDefender",
+                ),
+                style: _buttonStyle,
+                child: const Text(
+                  "Stop EXE",
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "🖥️ Output / Terminal",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "🖥️ Output / Terminal",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 30), // ✅ keeps terminal off buttons
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.black,
@@ -435,10 +489,11 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   // --------------------------------------------------------------------------
   // UI
@@ -449,7 +504,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Operation Squirrel Jetson Control"),
+          title: const Text("OS Remote"),
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.developer_board), text: "Dev Container"),
