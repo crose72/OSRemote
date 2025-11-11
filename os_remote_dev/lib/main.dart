@@ -28,375 +28,380 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   String _username = "";
   String _password = "";
   bool _isSignedIn = false;
-  String get _remoteJson =>
-    "/home/$_username/workspaces/os-dev/OperationSquirrel/SquirrelDefender/params.json";
-  String get _rebuildScript => "/home/$_username/rebuild_container.sh";
+  String get _squirrelDefenderParams =>
+      "/home/$_username/workspaces/os-dev/OperationSquirrel/SquirrelDefender/params.json";
+  String get _squirrelDefenderScripts =>
+      "/home/$_username/workspaces/os-dev/OperationSquirrel/scripts/";
 
-// --------------------------------------------------------------------------
-// Ask to log in to jetson
-// --------------------------------------------------------------------------
-Future<void> _showLoginDialog({bool firstTime = false}) async {
-  final hostController = TextEditingController(text: _host);
-  final usernameController = TextEditingController(text: _username);
-  final passwordController = TextEditingController(text: _password);
+  // --------------------------------------------------------------------------
+  // Ask to log in to jetson
+  // --------------------------------------------------------------------------
+  Future<void> _showLoginDialog({bool firstTime = false}) async {
+    final hostController = TextEditingController(text: _host);
+    final usernameController = TextEditingController(text: _username);
+    final passwordController = TextEditingController(text: _password);
 
-  await showDialog(
-    context: context,
-    barrierDismissible: !firstTime,
-    builder: (context) {
-      return AlertDialog(
-        title: Text(firstTime ? "🔐 First-time setup" : "Sign in to Jetson"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: hostController,
-              decoration: const InputDecoration(labelText: "Host (Jetson IP)"),
-            ),
-            TextField(
-              controller: usernameController,
-              decoration: const InputDecoration(labelText: "Username"),
-            ),
-            TextField(
-              controller: passwordController,
-              decoration: const InputDecoration(labelText: "Password"),
-              obscureText: true,
+    await showDialog(
+      context: context,
+      barrierDismissible: !firstTime,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(firstTime ? "🔐 First-time setup" : "Sign in to Jetson"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: hostController,
+                decoration: const InputDecoration(
+                  labelText: "Host (Jetson IP)",
+                ),
+              ),
+              TextField(
+                controller: usernameController,
+                decoration: const InputDecoration(labelText: "Username"),
+              ),
+              TextField(
+                controller: passwordController,
+                decoration: const InputDecoration(labelText: "Password"),
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            if (!firstTime)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+            ElevatedButton(
+              onPressed: () async {
+                setState(() {
+                  _host = hostController.text.trim();
+                  _username = usernameController.text.trim();
+                  _password = passwordController.text;
+                  _isSignedIn = true;
+                });
+                await _saveCredentials();
+                Navigator.pop(context);
+              },
+              child: const Text("Sign In"),
             ),
           ],
-        ),
-        actions: [
-          if (!firstTime)
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-          ElevatedButton(
-            onPressed: () async {
-              setState(() {
-                _host = hostController.text.trim();
-                _username = usernameController.text.trim();
-                _password = passwordController.text;
-                _isSignedIn = true;
-              });
-              await _saveCredentials();
-              Navigator.pop(context);
-            },
-            child: const Text("Sign In"),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-@override
-void initState() {
-  super.initState();
-  _loadCredentials();
-}
-
-Future<void> _loadCredentials() async {
-  final savedHost = await _secureStorage.read(key: 'host');
-  final savedUser = await _secureStorage.read(key: 'username');
-  final savedPass = await _secureStorage.read(key: 'password');
-
-  if (savedHost != null && savedUser != null && savedPass != null) {
-    setState(() {
-      _host = savedHost;
-      _username = savedUser;
-      _password = savedPass;
-      _isSignedIn = true;
-      _log = "🔒 Auto-signed in as $_username @ $_host";
-    });
-  } else {
-    // prompt first-time login
-    await _showLoginDialog(firstTime: true);
+        );
+      },
+    );
   }
-}
 
-Future<void> _saveCredentials() async {
-  await _secureStorage.write(key: 'host', value: _host);
-  await _secureStorage.write(key: 'username', value: _username);
-  await _secureStorage.write(key: 'password', value: _password);
-}
+  @override
+  void initState() {
+    super.initState();
+    _loadCredentials();
+  }
 
-Future<void> _clearCredentials() async {
-  await _secureStorage.deleteAll();
-  setState(() {
-    _isSignedIn = false;
-    _password = "";
-    _log = "Signed out.";
-  });
-}
+  Future<void> _loadCredentials() async {
+    final savedHost = await _secureStorage.read(key: 'host');
+    final savedUser = await _secureStorage.read(key: 'username');
+    final savedPass = await _secureStorage.read(key: 'password');
 
-// --------------------------------------------------------------------------
-// Fetch existing params.json from Jetson
-// --------------------------------------------------------------------------
-Future<void> _fetchConfig() async {
+    if (savedHost != null && savedUser != null && savedPass != null) {
+      setState(() {
+        _host = savedHost;
+        _username = savedUser;
+        _password = savedPass;
+        _isSignedIn = true;
+        _log = "🔒 Auto-signed in as $_username @ $_host";
+      });
+    } else {
+      // prompt first-time login
+      await _showLoginDialog(firstTime: true);
+    }
+  }
 
+  Future<void> _saveCredentials() async {
+    await _secureStorage.write(key: 'host', value: _host);
+    await _secureStorage.write(key: 'username', value: _username);
+    await _secureStorage.write(key: 'password', value: _password);
+  }
+
+  Future<void> _clearCredentials() async {
+    await _secureStorage.deleteAll();
+    setState(() {
+      _isSignedIn = false;
+      _password = "";
+      _log = "Signed out.";
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Fetch existing params.json from Jetson
+  // --------------------------------------------------------------------------
+  Future<void> _fetchConfig() async {
     if (!_isSignedIn) {
-    await _showLoginDialog();
-    if (!_isSignedIn) {
+      await _showLoginDialog();
+      if (!_isSignedIn) {
         setState(() => _log = "❌ Sign-in required before connecting.");
         return;
-    }
-    }
-
-  setState(() => _log = "Connecting to Jetson...");
-
-  try {
-    // --- Create SSH socket and client ---
-    final socket = await SSHSocket.connect(_host, _port);
-    final client = SSHClient(
-      socket,
-      username: _username,
-      onPasswordRequest: () => _password,
-    );
-
-    setState(() => _log = "📡 Connected — fetching params.json...");
-
-    // --- Download remote file ---
-    final sftp = await client.sftp();
-    final file = await sftp.open(_remoteJson);
-    final bytes = await file.readBytes();
-    final content = utf8.decode(bytes);
-
-    await file.close();
-    sftp.close();
-    client.close();
-
-    // --- Save locally (optional) ---
-    final dir = await getTemporaryDirectory();
-    final localFile = File("${dir.path}/params.json");
-    await localFile.writeAsString(content);
-
-    setState(() {
-      _controller.text = content;
-      _log = "✅ params.json loaded successfully!";
-    });
-  } catch (e, st) {
-    debugPrint("Fetch failed: $e\n$st");
-    setState(() => _log = "❌ Fetch failed: $e");
-  }
-}
-
-// --------------------------------------------------------------------------
-// Upload updated JSON and rebuild Docker container
-// --------------------------------------------------------------------------
-Future<void> _uploadConfig() async {
-
-    if (!_isSignedIn) {
-        await _showLoginDialog();
-        if (!_isSignedIn) {
-            setState(() => _log = "❌ Sign-in required before connecting.");
-            return;
-        }
+      }
     }
 
-  setState(() => _log = "Connecting to Jetson...");
+    setState(() => _log = "Connecting to Jetson...");
 
-  try {
-    // Validate JSON
     try {
-      jsonDecode(_controller.text);
-    } catch (e) {
-      setState(() => _log = "❌ Invalid JSON: $e");
-      return;
+      // --- Create SSH socket and client ---
+      final socket = await SSHSocket.connect(_host, _port);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
+
+      setState(() => _log = "📡 Connected — fetching params.json...");
+
+      // --- Download remote file ---
+      final sftp = await client.sftp();
+      final file = await sftp.open(_squirrelDefenderParams);
+      final bytes = await file.readBytes();
+      final content = utf8.decode(bytes);
+
+      await file.close();
+      sftp.close();
+      client.close();
+
+      // --- Save locally (optional) ---
+      final dir = await getTemporaryDirectory();
+      final localFile = File("${dir.path}/params.json");
+      await localFile.writeAsString(content);
+
+      setState(() {
+        _controller.text = content;
+        _log = "✅ params.json loaded successfully!";
+      });
+    } catch (e, st) {
+      debugPrint("Fetch failed: $e\n$st");
+      setState(() => _log = "❌ Fetch failed: $e");
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Upload updated JSON and rebuild Docker container
+  // --------------------------------------------------------------------------
+  Future<void> _uploadConfig() async {
+    if (!_isSignedIn) {
+      await _showLoginDialog();
+      if (!_isSignedIn) {
+        setState(() => _log = "❌ Sign-in required before connecting.");
+        return;
+      }
     }
 
-    // --- Create SSH socket and client ---
-    final socket = await SSHSocket.connect(_host, _port);
-    final client = SSHClient(
-      socket,
-      username: _username,
-      onPasswordRequest: () => _password,
-    );
+    setState(() => _log = "Connecting to Jetson...");
 
-    setState(() => _log = "📡 Connected — uploading params.json...");
+    try {
+      // Validate JSON
+      try {
+        jsonDecode(_controller.text);
+      } catch (e) {
+        setState(() => _log = "❌ Invalid JSON: $e");
+        return;
+      }
 
-    // --- Open SFTP and upload file directly from memory ---
-    final sftp = await client.sftp();
-    final file = await sftp.open(
-      _remoteJson,
-      mode: SftpFileOpenMode.create |
+      // --- Create SSH socket and client ---
+      final socket = await SSHSocket.connect(_host, _port);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
+
+      setState(() => _log = "📡 Connected — uploading params.json...");
+
+      // --- Open SFTP and upload file directly from memory ---
+      final sftp = await client.sftp();
+      final file = await sftp.open(
+        _squirrelDefenderParams,
+        mode:
+            SftpFileOpenMode.create |
             SftpFileOpenMode.truncate |
             SftpFileOpenMode.write,
-    );
+      );
 
-    final bytes = utf8.encode(_controller.text);
-    await file.writeBytes(bytes);
-    await file.close();
+      final bytes = utf8.encode(_controller.text);
+      await file.writeBytes(bytes);
+      await file.close();
 
-    setState(() => _log = "✅ Upload successful! Verifying...");
+      setState(() => _log = "✅ Upload successful! Verifying...");
 
-    // --- Verify upload on Jetson ---
-    final result = await client.run('ls -lh $_remoteJson || echo "Missing file"');
-    setState(() => _log = "✅ Done!\n\n$result");
+      // --- Verify upload on Jetson ---
+      final result = await client.run(
+        'ls -lh $_squirrelDefenderParams || echo "Missing file"',
+      );
+      setState(() => _log = "✅ Done!\n\n$result");
 
-    // --- Clean up ---
-    sftp.close();
-    client.close();
-  } catch (e, st) {
-    debugPrint("Upload failed: $e\n$st");
-    setState(() => _log = "❌ Upload failed: $e");
-  }
-}
-
-// --------------------------------------------------------------------------
-// Execute a command over SSH (e.g. to start container or run program)
-// --------------------------------------------------------------------------
-Future<void> _execCommand(String cmd, {String? description}) async {
-  if (!_isSignedIn) {
-    await _showLoginDialog();
-    if (!_isSignedIn) {
-      setState(() => _log = "❌ Sign-in required before connecting.");
-      return;
+      // --- Clean up ---
+      sftp.close();
+      client.close();
+    } catch (e, st) {
+      debugPrint("Upload failed: $e\n$st");
+      setState(() => _log = "❌ Upload failed: $e");
     }
   }
 
-  setState(() => _log = "⚙️ ${description ?? 'Running command'}...");
+  // --------------------------------------------------------------------------
+  // Execute a command over SSH (e.g. to start container or run program)
+  // --------------------------------------------------------------------------
+  Future<void> _execCommand(String cmd, {String? description}) async {
+    if (!_isSignedIn) {
+      await _showLoginDialog();
+      if (!_isSignedIn) {
+        setState(() => _log = "❌ Sign-in required before connecting.");
+        return;
+      }
+    }
 
-  try {
-    // --- Connect ---
-    final socket = await SSHSocket.connect(_host, _port);
-    final client = SSHClient(
-      socket,
-      username: _username,
-      onPasswordRequest: () => _password,
-    );
+    setState(() => _log = "⚙️ ${description ?? 'Running command'}...");
 
-    // --- Run command and capture output ---
-    final result = await client.run(cmd);
+    try {
+      // --- Connect ---
+      final socket = await SSHSocket.connect(_host, _port);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
 
-    // --- Cleanup ---
-    client.close(); // no await here
-    socket.close(); // no await here
+      // --- Run command and capture output ---
+      final result = await client.run(cmd);
 
-    setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$result");
-  } catch (e, st) {
-    debugPrint("Command failed: $e\n$st");
-    setState(() => _log = "❌ Command failed: $e");
+      // --- Cleanup ---
+      client.close(); // no await here
+      socket.close(); // no await here
+
+      setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$result");
+    } catch (e, st) {
+      debugPrint("Command failed: $e\n$st");
+      setState(() => _log = "❌ Command failed: $e");
+    }
   }
-}
 
   // --------------------------------------------------------------------------
   // UI
   // --------------------------------------------------------------------------
-    @override
-    Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(title: const Text("Jetson Config Editor")),
-        body: Padding(
+      appBar: AppBar(title: const Text("Jetson Config Editor")),
+      body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-            children: [
+          children: [
             ElevatedButton(
-                onPressed: _clearCredentials,
-                child: const Text("Sign Out"),
+              onPressed: _clearCredentials,
+              child: const Text("Sign Out"),
             ),
             // --------------------------------------------------------------------------
             // 🔧 Container / Program Control Section
             // --------------------------------------------------------------------------
             const SizedBox(height: 16),
             const Text(
-            "🔧 Container / Program Control",
-            style: TextStyle(fontWeight: FontWeight.bold),
+              "🔧 Container / Program Control",
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
 
             Row(
-            children: [
+              children: [
                 Expanded(
-                child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () => _execCommand(
-                    "sudo docker start -ai squirrel_dev",
-                    description: "Starting Dev Container",
+                      "bash -c '$_squirrelDefenderScripts/run.sh dev orin'",
+                      description: "Starting Dev Container + Program",
                     ),
-                    child: const Text("Start Dev Container"),
+                    child: const Text("Start Dev"),
+                  ),
                 ),
-                ),
+
                 const SizedBox(width: 8),
                 Expanded(
-                child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () => _execCommand(
-                    "sudo docker stop squirrel_dev",
-                    description: "Stopping Dev Container",
+                      "docker exec squirreldefender-dev pkill -2 squirrelDefender",
+                      description: "Stopping Program (Ctrl+C)",
                     ),
-                    child: const Text("Stop Dev Container"),
+                    child: const Text("Stop Dev"),
+                  ),
                 ),
-                ),
-            ],
+              ],
             ),
 
             const SizedBox(height: 8),
 
             Row(
-            children: [
+              children: [
                 Expanded(
-                child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () => _execCommand(
-                    "sudo docker exec squirrel_dev ./run_squirreldefender.sh &",
-                    description: "Starting Program",
+                      "exec ./run_squirreldefender.sh &",
+                      description: "Starting dev container",
                     ),
-                    child: const Text("Start Program"),
-                ),
+                    child: const Text("Start Dev"),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () => _execCommand(
-                    "sudo docker exec squirrel_dev pkill -f SquirrelDefender",
-                    description: "Stopping Program",
+                      "sudo docker exec squirrel_dev pkill -f SquirrelDefender",
+                      description: "Stopping Program",
                     ),
                     child: const Text("Stop Program"),
+                  ),
                 ),
-                ),
-            ],
+              ],
             ),
 
             Row(
-                children: [
+              children: [
                 Expanded(
-                    child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: _busy ? null : _fetchConfig,
                     child: const Text("Fetch Config"),
-                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: _busy ? null : _uploadConfig,
                     child: Text(_busy ? "Working..." : "Upload"),
-                    ),
+                  ),
                 ),
-                ],
+              ],
             ),
             const SizedBox(height: 12),
             const Text("Edit params.json:"),
             Expanded(
-                child: TextField(
+              child: TextField(
                 controller: _controller,
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
                 decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: '{\n  "Kp": 0.5,\n  "Ki": 0.1\n}',
+                  border: OutlineInputBorder(),
+                  hintText: '{\n  "Kp": 0.5,\n  "Ki": 0.1\n}',
                 ),
                 style: const TextStyle(fontFamily: "monospace"),
-                ),
+              ),
             ),
             const SizedBox(height: 12),
             Expanded(
-                child: SingleChildScrollView(
+              child: SingleChildScrollView(
                 child: Text(
-                    _log,
-                    style: const TextStyle(fontFamily: "monospace"),
+                  _log,
+                  style: const TextStyle(fontFamily: "monospace"),
                 ),
-                ),
+              ),
             ),
-            ],
+          ],
         ),
-        ),
+      ),
     );
-    }
+  }
 }
