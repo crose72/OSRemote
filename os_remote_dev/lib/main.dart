@@ -324,47 +324,90 @@ Widget _jsonFormView() {
   // --------------------------------------------------------------------------
   // Tabs
   // --------------------------------------------------------------------------
-  Widget _buildJsonConfigTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _busy ? null : _downloadConfig,
-                  style: _buttonStyle,
-                  child: const Text("Download", textAlign: TextAlign.center),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _busy ? null : _uploadConfig,
-                  style: _buttonStyle,
-                  child: Text(_busy ? "Working..." : "Upload",
-                      textAlign: TextAlign.center),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _clearCredentials,
+Widget _buildJsonConfigTab() {
+  final hasParams = _controller.text.trim().isNotEmpty;
+
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --- Buttons Row ---
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _downloadConfig,
                 style: _buttonStyle,
-                child:
-                    const Text("Sign Out", textAlign: TextAlign.center),
+                child: const Text("Download", textAlign: TextAlign.center),
               ),
-            ],
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _uploadConfig,
+                style: _buttonStyle,
+                child: Text(_busy ? "Working..." : "Upload",
+                    textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _clearCredentials,
+              style: _buttonStyle,
+              child: const Text("Sign Out", textAlign: TextAlign.center),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+        const Text(
+          "⚙️ Parameters",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+
+        // --- Scrollable Form or Placeholder ---
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 30), // 🔼 lifted a bit higher
+            child: hasParams
+                ? Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(8),
+                        child: _jsonFormView(),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.download_rounded,
+                            size: 48, color: Colors.grey),
+                        SizedBox(height: 8),
+                        Text(
+                          "No parameters loaded.\nTap “Download” to fetch params.json.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
-          const SizedBox(height: 16),
-          const Text("⚙️ Parameters", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Expanded(child: _jsonFormView()),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
+
 
   Widget _buildDevContainerTab() {
     return Padding(
