@@ -20,12 +20,12 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   final _controller = TextEditingController();
   String _log = "";
   bool _busy = false;
-  final ButtonStyle _buttonStyle = ElevatedButton.styleFrom(
-  minimumSize: const Size(0, 46), // consistent height, flexible width
-  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-  padding: const EdgeInsets.symmetric(horizontal: 12),
-);
 
+  final ButtonStyle _buttonStyle = ElevatedButton.styleFrom(
+    minimumSize: const Size(0, 46),
+    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+  );
 
   // --- Connection parameters ---
   final _secureStorage = const FlutterSecureStorage();
@@ -44,7 +44,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   final ScrollController _logScrollController = ScrollController();
 
   // --------------------------------------------------------------------------
-  // Ask to log in to jetson
+  // Ask to log in to Jetson
   // --------------------------------------------------------------------------
   Future<void> _showLoginDialog({bool firstTime = false}) async {
     final hostController = TextEditingController(text: _host);
@@ -62,9 +62,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
             children: [
               TextField(
                 controller: hostController,
-                decoration: const InputDecoration(
-                  labelText: "Host (Jetson IP)",
-                ),
+                decoration: const InputDecoration(labelText: "Host (Jetson IP)"),
               ),
               TextField(
                 controller: usernameController,
@@ -122,7 +120,6 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
         _log = "🔒 Auto-signed in as $_username @ $_host";
       });
     } else {
-      // prompt first-time login
       await _showLoginDialog(firstTime: true);
     }
   }
@@ -143,7 +140,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   }
 
   // --------------------------------------------------------------------------
-  // Fetch existing params.json from Jetson
+  // Download params.json from Jetson
   // --------------------------------------------------------------------------
   Future<void> _downloadConfig() async {
     if (!_isSignedIn) {
@@ -157,17 +154,12 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
     setState(() => _log = "Connecting to Jetson...");
 
     try {
-      // --- Create SSH socket and client ---
       final socket = await SSHSocket.connect(_host, _port);
-      final client = SSHClient(
-        socket,
-        username: _username,
-        onPasswordRequest: () => _password,
-      );
+      final client =
+          SSHClient(socket, username: _username, onPasswordRequest: () => _password);
 
       setState(() => _log = "📡 Connected — fetching params.json...");
 
-      // --- Download remote file ---
       final sftp = await client.sftp();
       final file = await sftp.open(_squirrelDefenderParams);
       final bytes = await file.readBytes();
@@ -177,7 +169,6 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
       sftp.close();
       client.close();
 
-      // --- Save locally (optional) ---
       final dir = await getTemporaryDirectory();
       final localFile = File("${dir.path}/params.json");
       await localFile.writeAsString(content);
@@ -193,72 +184,58 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   }
 
   // --------------------------------------------------------------------------
-  // Upload updated JSON and rebuild Docker container
+  // Upload updated JSON to Jetson
   // --------------------------------------------------------------------------
-  Future<void> _uploadConfig() async {
+Future<void> _uploadConfig() async {
+  if (!_isSignedIn) {
+    await _showLoginDialog();
     if (!_isSignedIn) {
-      await _showLoginDialog();
-      if (!_isSignedIn) {
-        setState(() => _log = "❌ Sign-in required before connecting.");
-        return;
-      }
-    }
-
-    setState(() => _log = "Connecting to Jetson...");
-
-    try {
-      // Validate JSON
-      try {
-        jsonDecode(_controller.text);
-      } catch (e) {
-        setState(() => _log = "❌ Invalid JSON: $e");
-        return;
-      }
-
-      // --- Create SSH socket and client ---
-      final socket = await SSHSocket.connect(_host, _port);
-      final client = SSHClient(
-        socket,
-        username: _username,
-        onPasswordRequest: () => _password,
-      );
-
-      setState(() => _log = "📡 Connected — uploading params.json...");
-
-      // --- Open SFTP and upload file directly from memory ---
-      final sftp = await client.sftp();
-      final file = await sftp.open(
-        _squirrelDefenderParams,
-        mode:
-            SftpFileOpenMode.create |
-            SftpFileOpenMode.truncate |
-            SftpFileOpenMode.write,
-      );
-
-      final bytes = utf8.encode(_controller.text);
-      await file.writeBytes(bytes);
-      await file.close();
-
-      setState(() => _log = "✅ Upload successful! Verifying...");
-
-      // --- Verify upload on Jetson ---
-      final result = await client.run(
-        'ls -lh $_squirrelDefenderParams || echo "Missing file"',
-      );
-      final decoded = utf8.decode(result); // 👈 decode bytes to readable text
-      setState(() => _log = "✅ Done!\n\n$decoded");
-
-      // --- Clean up ---
-      sftp.close();
-      client.close();
-    } catch (e, st) {
-      debugPrint("Upload failed: $e\n$st");
-      setState(() => _log = "❌ Upload failed: $e");
+      setState(() => _log = "❌ Sign-in required before connecting.");
+      return;
     }
   }
 
+  setState(() => _log = "Connecting to Jetson...");
+
+  try {
+    // Pretty-print JSON before upload
+    final parsed = jsonDecode(_controller.text);
+    final prettyJson = const JsonEncoder.withIndent('  ').convert(parsed);
+    _controller.text = prettyJson;
+
+    final socket = await SSHSocket.connect(_host, _port);
+    final client = SSHClient(socket, username: _username, onPasswordRequest: () => _password);
+
+    setState(() => _log = "📡 Connected — uploading params.json...");
+
+    final sftp = await client.sftp();
+    final file = await sftp.open(
+      _squirrelDefenderParams,
+      mode: SftpFileOpenMode.create |
+          SftpFileOpenMode.truncate |
+          SftpFileOpenMode.write,
+    );
+
+    final bytes = utf8.encode(prettyJson);
+    await file.writeBytes(bytes);
+    await file.close();
+
+    setState(() => _log = "✅ Upload successful! Verifying...");
+
+    final result = await client.run('ls -lh $_squirrelDefenderParams || echo "Missing file"');
+    final decoded = utf8.decode(result);
+    setState(() => _log = "✅ Done!\n\n$decoded");
+
+    sftp.close();
+    client.close();
+  } catch (e, st) {
+    debugPrint("Upload failed: $e\n$st");
+    setState(() => _log = "❌ Upload failed: $e");
+  }
+}
+
   // --------------------------------------------------------------------------
-  // Execute a command over SSH (e.g. to start container or run program)
+  // Execute command on Jetson
   // --------------------------------------------------------------------------
   Future<void> _execCommand(String cmd, {String? description}) async {
     if (!_isSignedIn) {
@@ -272,19 +249,13 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
     setState(() => _log = "⚙️ ${description ?? 'Running command'}...");
 
     try {
-      // --- Connect ---
       final socket = await SSHSocket.connect(_host, _port);
-      final client = SSHClient(
-        socket,
-        username: _username,
-        onPasswordRequest: () => _password,
-      );
+      final client =
+          SSHClient(socket, username: _username, onPasswordRequest: () => _password);
 
-      // --- Run command and decode UTF-8 output ---
       final result = await client.run(cmd);
       final decoded = utf8.decode(result);
 
-      // --- Cleanup ---
       client.close();
       socket.close();
 
@@ -295,205 +266,208 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
     }
   }
 
-Widget _buildJsonConfigTab() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _busy ? null : _downloadConfig,
-                style: _buttonStyle,
-                child: const Text(
-                  "Download",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
-                ),
-              ),
+  // --------------------------------------------------------------------------
+  // Dynamic JSON → Form widget
+  // --------------------------------------------------------------------------
+Widget _jsonFormView() {
+  Map<String, dynamic> data = {};
+  try {
+    data = jsonDecode(_controller.text);
+  } catch (_) {}
+
+  Widget buildForm(Map<String, dynamic> obj) {
+    return Column(
+      children: obj.entries.map((entry) {
+        final key = entry.key;
+        final value = entry.value;
+
+        if (value is Map<String, dynamic>) {
+          return ExpansionTile(
+            title: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)),
+            children: [Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: buildForm(value),
+            )],
+          );
+        } else if (value is bool) {
+          return SwitchListTile(
+            title: Text(key),
+            value: value,
+            onChanged: (v) {
+              obj[key] = v;
+              _controller.text = const JsonEncoder.withIndent('  ').convert(data);
+              setState(() {});
+            },
+          );
+        } else {
+          return ListTile(
+            title: Text(key),
+            subtitle: TextField(
+              controller: TextEditingController(text: value.toString()),
+              onChanged: (v) {
+                final parsed = num.tryParse(v);
+                obj[key] = parsed ?? v;
+                _controller.text = const JsonEncoder.withIndent('  ').convert(data);
+              },
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _busy ? null : _uploadConfig,
-                style: _buttonStyle,
-                child: Text(
-                  _busy ? "Working..." : "Upload",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _clearCredentials,
-              style: _buttonStyle,
-              child: const Text(
-                "Sign Out",
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.visible,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          "✏️ Edit params.json",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: '{\n  "Kp": 0.5,\n  "Ki": 0.1\n}',
-            ),
-            style: const TextStyle(fontFamily: "monospace"),
-          ),
-        ),
-      ],
-    ),
+          );
+        }
+      }).toList(),
+    );
+  }
+
+  return SingleChildScrollView(
+    child: buildForm(data),
   );
 }
 
-Widget _buildDevContainerTab() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
-                  description: "Starting Dev Container",
+  // --------------------------------------------------------------------------
+  // Tabs
+  // --------------------------------------------------------------------------
+  Widget _buildJsonConfigTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _downloadConfig,
+                  style: _buttonStyle,
+                  child: const Text("Download", textAlign: TextAlign.center),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _uploadConfig,
+                  style: _buttonStyle,
+                  child: Text(_busy ? "Working..." : "Upload",
+                      textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _clearCredentials,
                 style: _buttonStyle,
-                child: const Text(
-                  "Start Dev",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
+                child:
+                    const Text("Sign Out", textAlign: TextAlign.center),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text("⚙️ Parameters", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Expanded(child: _jsonFormView()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevContainerTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
+                    description: "Starting Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Start Dev", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker stop squirreldefender-dev",
-                  description: "Stopping Dev Container",
-                ),
-                style: _buttonStyle,
-                child: const Text(
-                  "Stop Dev",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker stop squirreldefender-dev",
+                    description: "Stopping Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Stop Dev", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker rm -f squirreldefender-dev || true && docker system prune -f",
-                  description: "Deleting Dev Container",
-                ),
-                style: _buttonStyle,
-                child: const Text(
-                  "Del Dev",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker rm -f squirreldefender-dev || true && docker system prune -f",
+                    description: "Deleting Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Del Dev", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
-                  description: "Run SquirrelDefender",
-                ),
-                style: _buttonStyle,
-                child: const Text(
-                  "Run EXE",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
+                    description: "Run SquirrelDefender",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Run EXE", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
-                  description: "Stop SquirrelDefender",
-                ),
-                style: _buttonStyle,
-                child: const Text(
-                  "Stop EXE",
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.visible,
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                    description: "Stop SquirrelDefender",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Stop EXE", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          "🖥️ Output / Terminal",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 30), // ✅ keeps terminal off buttons
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.all(8),
-              child: Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: _logScrollController,
-                  child: Text(
-                    _log,
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontFamily: "monospace",
-                      fontSize: 13,
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text("🖥️ Output / Terminal",
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 30),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _logScrollController,
+                    child: Text(
+                      _log,
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   // --------------------------------------------------------------------------
   // UI
