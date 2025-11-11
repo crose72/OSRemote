@@ -30,7 +30,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   bool _isSignedIn = false;
   String get _squirrelDefenderParams =>
       "/home/$_username/workspaces/os-dev/OperationSquirrel/SquirrelDefender/params.json";
-  String get _squirrelDefenderScripts =>
+  String get _operationSquirrelPath =>
       "/home/$_username/workspaces/os-dev/OperationSquirrel/scripts/";
 
   // --------------------------------------------------------------------------
@@ -312,7 +312,8 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
-                      "bash -c '$_squirrelDefenderScripts/run.sh dev orin'",
+                      "bash -c '$_operationSquirrelPath/run.sh dev orin'", // && docker exec -d squirreldefender-dev ./squirreldefender'",
+                      // "bash -c '$_operationSquirrelPath/scripts/run.sh dev orin; docker exec -d squirreldefender-dev bash -lc \"cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender\"'",
                       description: "Starting Dev Container + Program",
                     ),
                     child: const Text("Start Dev"),
@@ -323,36 +324,19 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
-                      "docker exec squirreldefender-dev pkill -2 squirrelDefender",
-                      description: "Stopping Program (Ctrl+C)",
+                      "docker stop squirreldefender-dev", // "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                      description: "Stopping Program",
                     ),
                     child: const Text("Stop Dev"),
                   ),
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                Expanded(
+                  Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
-                      "exec ./run_squirreldefender.sh &",
-                      description: "Starting dev container",
+                      "docker exec squirreldefender-dev ls -lh /workspace/OperationSquirrel/SquirrelDefender/build",
+                      description: "Listing contents of build folder",
                     ),
-                    child: const Text("Start Dev"),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _execCommand(
-                      "sudo docker exec squirrel_dev pkill -f SquirrelDefender",
-                      description: "Stopping Program",
-                    ),
-                    child: const Text("Stop Program"),
+                    child: const Text("List Container Files"),
                   ),
                 ),
               ],
