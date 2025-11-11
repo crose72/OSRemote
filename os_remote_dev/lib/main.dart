@@ -377,8 +377,10 @@ Widget _buildJsonConfigTab() {
               child: ElevatedButton(
                 onPressed: _busy ? null : _uploadConfig,
                 style: _buttonStyle,
-                child: Text(_busy ? "Working..." : "Upload",
-                    textAlign: TextAlign.center),
+                child: Text(
+                  _busy ? "Working..." : "Upload",
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -397,40 +399,44 @@ Widget _buildJsonConfigTab() {
         ),
         const SizedBox(height: 8),
 
-        // --- Scrollable Form or Placeholder ---
+        // --- Scrollable Parameter Form (same height as terminal) ---
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 30), // 🔼 lifted a bit higher
-            child: hasParams
-                ? Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade400),
-                    ),
-                    child: Scrollbar(
+            padding: const EdgeInsets.only(bottom: 40),
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(
+                minHeight: 300, // ✅ consistent with terminal height
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: hasParams
+                  ? Scrollbar(
                       thumbVisibility: true,
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(8),
                         child: _jsonFormView(),
                       ),
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.download_rounded,
+                              size: 48, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text(
+                            "No parameters loaded.\nTap “Download” to fetch params.json.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                : Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.download_rounded,
-                            size: 48, color: Colors.grey),
-                        SizedBox(height: 8),
-                        Text(
-                          "No parameters loaded.\nTap “Download” to fetch params.json.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
+            ),
           ),
         ),
       ],
