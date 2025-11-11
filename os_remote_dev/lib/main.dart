@@ -237,34 +237,66 @@ Future<void> _uploadConfig() async {
   // --------------------------------------------------------------------------
   // Execute command on Jetson
   // --------------------------------------------------------------------------
-  Future<void> _execCommand(String cmd, {String? description}) async {
+Future<void> _execCommand(String cmd, {String? description}) async {
+  if (!_isSignedIn) {
+    await _showLoginDialog();
     if (!_isSignedIn) {
-      await _showLoginDialog();
-      if (!_isSignedIn) {
-        setState(() => _log = "❌ Sign-in required before connecting.");
-        return;
-      }
-    }
-
-    setState(() => _log = "⚙️ ${description ?? 'Running command'}...");
-
-    try {
-      final socket = await SSHSocket.connect(_host, _port);
-      final client =
-          SSHClient(socket, username: _username, onPasswordRequest: () => _password);
-
-      final result = await client.run(cmd);
-      final decoded = utf8.decode(result);
-
-      client.close();
-      socket.close();
-
-      setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$decoded");
-    } catch (e, st) {
-      debugPrint("Command failed: $e\n$st");
-      setState(() => _log = "❌ Command failed: $e");
+      setState(() => _log = "❌ Sign-in required before connecting.");
+      return;
     }
   }
+
+  setState(() => _log = "⚙️ ${description ?? 'Running command'}...\n");
+
+  try {
+    final socket = await SSHSocket.connect(_host, _port);
+    final client = SSHClient(
+      socket,
+      username: _username,
+      onPasswordRequest: () => _password,
+    );
+
+    // --- Execute command and stream stdout/stderr ---
+    final session = await client.execute(cmd);
+
+    session.stdout
+        .cast<List<int>>()
+        .transform(utf8.decoder)
+        .listen((data) {
+      setState(() {
+        _log += data;
+      });
+      // Auto-scroll down
+      if (_logScrollController.hasClients) {
+        _logScrollController.jumpTo(
+          _logScrollController.position.maxScrollExtent,
+        );
+      }
+    });
+
+    session.stderr
+        .cast<List<int>>()
+        .transform(utf8.decoder)
+        .listen((data) {
+      setState(() {
+        _log += "\n❗ $data";
+      });
+    });
+
+    // Wait until process completes (no exit code available)
+    await session.done;
+
+    setState(() {
+      _log += "\n\n✅ Process finished.\n";
+    });
+
+    client.close();
+    socket.close();
+  } catch (e, st) {
+    debugPrint("Command failed: $e\n$st");
+    setState(() => _log = "❌ Command failed: $e");
+  }
+}
 
   // --------------------------------------------------------------------------
   // Dynamic JSON → Form widget
