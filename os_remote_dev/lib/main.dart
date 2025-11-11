@@ -318,7 +318,7 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => _execCommand(
-                      "bash -c '$_operationSquirrelPath/run.sh dev orin'", // && docker exec -d squirreldefender-dev ./squirreldefender'",
+                      "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'", // && docker exec -d squirreldefender-dev ./squirreldefender'",
                       // "bash -c '$_operationSquirrelPath/scripts/run.sh dev orin; docker exec -d squirreldefender-dev bash -lc \"cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender\"'",
                       description: "Starting Dev Container",
                     ),
