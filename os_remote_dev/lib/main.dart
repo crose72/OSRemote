@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:dartssh2/dartssh2.dart';
+import 'dart:typed_data';
 
 void main() {
   runApp(const MaterialApp(home: JetsonConfigPage()));
@@ -246,7 +247,9 @@ Future<void> _execCommand(String cmd, {String? description}) async {
     }
   }
 
-  setState(() => _log = "⚙️ ${description ?? 'Running command'}...\n");
+  setState(() {
+    _log = "⚙️ ${description ?? 'Running command'}...\n";
+  });
 
   try {
     final socket = await SSHSocket.connect(_host, _port);
@@ -256,35 +259,27 @@ Future<void> _execCommand(String cmd, {String? description}) async {
       onPasswordRequest: () => _password,
     );
 
-    // --- Execute command and stream stdout/stderr ---
+    // --- Execute command and stream raw stdout/stderr ---
     final session = await client.execute(cmd);
 
-    session.stdout
-        .cast<List<int>>()
-        .transform(utf8.decoder)
-        .listen((data) {
+    // Combine stdout + stderr as byte streams for full fidelity
+    void appendRaw(Uint8List bytes) {
       setState(() {
-        _log += data;
+        // Append raw text — don't strip newlines or try to re-encode
+        _log += String.fromCharCodes(bytes);
       });
-      // Auto-scroll down
+      // Auto-scroll
       if (_logScrollController.hasClients) {
         _logScrollController.jumpTo(
           _logScrollController.position.maxScrollExtent,
         );
       }
-    });
+    }
 
-    session.stderr
-        .cast<List<int>>()
-        .transform(utf8.decoder)
-        .listen((data) {
-      setState(() {
-        _log += "\n❗ $data";
-      });
-    });
+    session.stdout.listen(appendRaw);
+    session.stderr.listen(appendRaw);
 
-    // Wait until process completes (no exit code available)
-    await session.done;
+    await session.done; // Wait until the process finishes
 
     setState(() {
       _log += "\n\n✅ Process finished.\n";
@@ -294,9 +289,12 @@ Future<void> _execCommand(String cmd, {String? description}) async {
     socket.close();
   } catch (e, st) {
     debugPrint("Command failed: $e\n$st");
-    setState(() => _log = "❌ Command failed: $e");
+    setState(() {
+      _log = "❌ Command failed: $e";
+    });
   }
 }
+
 
   // --------------------------------------------------------------------------
   // Dynamic JSON → Form widget
