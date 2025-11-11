@@ -242,6 +242,43 @@ Future<void> _uploadConfig() async {
   }
 }
 
+// --------------------------------------------------------------------------
+// Execute a command over SSH (e.g. to start container or run program)
+// --------------------------------------------------------------------------
+Future<void> _execCommand(String cmd, {String? description}) async {
+  if (!_isSignedIn) {
+    await _showLoginDialog();
+    if (!_isSignedIn) {
+      setState(() => _log = "❌ Sign-in required before connecting.");
+      return;
+    }
+  }
+
+  setState(() => _log = "⚙️ ${description ?? 'Running command'}...");
+
+  try {
+    // --- Connect ---
+    final socket = await SSHSocket.connect(_host, _port);
+    final client = SSHClient(
+      socket,
+      username: _username,
+      onPasswordRequest: () => _password,
+    );
+
+    // --- Run command and capture output ---
+    final result = await client.run(cmd);
+
+    // --- Cleanup ---
+    client.close(); // no await here
+    socket.close(); // no await here
+
+    setState(() => _log = "✅ ${description ?? 'Done'}:\n\n$result");
+  } catch (e, st) {
+    debugPrint("Command failed: $e\n$st");
+    setState(() => _log = "❌ Command failed: $e");
+  }
+}
+
   // --------------------------------------------------------------------------
   // UI
   // --------------------------------------------------------------------------
@@ -257,6 +294,65 @@ Future<void> _uploadConfig() async {
                 onPressed: _clearCredentials,
                 child: const Text("Sign Out"),
             ),
+            // --------------------------------------------------------------------------
+            // 🔧 Container / Program Control Section
+            // --------------------------------------------------------------------------
+            const SizedBox(height: 16),
+            const Text(
+            "🔧 Container / Program Control",
+            style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            Row(
+            children: [
+                Expanded(
+                child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                    "sudo docker start -ai squirrel_dev",
+                    description: "Starting Dev Container",
+                    ),
+                    child: const Text("Start Dev Container"),
+                ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                    "sudo docker stop squirrel_dev",
+                    description: "Stopping Dev Container",
+                    ),
+                    child: const Text("Stop Dev Container"),
+                ),
+                ),
+            ],
+            ),
+
+            const SizedBox(height: 8),
+
+            Row(
+            children: [
+                Expanded(
+                child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                    "sudo docker exec squirrel_dev ./run_squirreldefender.sh &",
+                    description: "Starting Program",
+                    ),
+                    child: const Text("Start Program"),
+                ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                child: ElevatedButton(
+                    onPressed: () => _execCommand(
+                    "sudo docker exec squirrel_dev pkill -f SquirrelDefender",
+                    description: "Stopping Program",
+                    ),
+                    child: const Text("Stop Program"),
+                ),
+                ),
+            ],
+            ),
+
             Row(
                 children: [
                 Expanded(
