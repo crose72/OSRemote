@@ -450,6 +450,22 @@ Widget _buildDevContainerTab() {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // --- Toggle Hotspot / Wi-Fi ---
+        ElevatedButton.icon(
+          onPressed: () => _execCommand(
+            "sudo /home/$_username/workspaces/os-dev/OperationSquirrel/scripts/toggle_osremote.sh",
+            description: "Toggling Wi-Fi / Hotspot",
+          ),
+          icon: const Icon(Icons.wifi_tethering),
+          label: const Text("Toggle Hotspot / Wi-Fi", textAlign: TextAlign.center),
+          style: _buttonStyle.copyWith(
+            backgroundColor: WidgetStateProperty.all(Colors.indigoAccent),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+        const Divider(),
+
         // --- Top Buttons ---
         Row(
           children: [
@@ -518,8 +534,10 @@ Widget _buildDevContainerTab() {
         ),
 
         const SizedBox(height: 16),
-        const Text("🖥️ Output / Terminal",
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text(
+          "🖥️ Output / Terminal",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
 
         // --- Stable Full-Width Terminal ---
@@ -527,9 +545,9 @@ Widget _buildDevContainerTab() {
           child: Padding(
             padding: const EdgeInsets.only(bottom: 40),
             child: Container(
-              width: double.infinity, // ✅ prevent narrowing
+              width: double.infinity,
               constraints: const BoxConstraints(
-                minHeight: 300, // ✅ keeps it tall even when log is short
+                minHeight: 300,
               ),
               decoration: BoxDecoration(
                 color: Colors.black,
@@ -560,6 +578,7 @@ Widget _buildDevContainerTab() {
     ),
   );
 }
+
 
   // --------------------------------------------------------------------------
   // UI
