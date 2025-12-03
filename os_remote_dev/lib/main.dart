@@ -36,11 +36,11 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   String _password = "";
   bool _isSignedIn = false;
   String get _squirrelDefenderParams =>
-      "/home/$_username/workspaces/os-dev/OperationSquirrel/SquirrelDefender/params.json";
+      "/home/$_username/workspaces/os-dev/operationsquirrel/squirreldefender/params.json";
   String get _operationSquirrelPath =>
-      "/home/$_username/workspaces/os-dev/OperationSquirrel/scripts/";
+      "/home/$_username/workspaces/os-dev/operationsquirrel/scripts/";
   final _pathController = TextEditingController(
-    text: "/workspace/OperationSquirrel/SquirrelDefender/build",
+    text: "/workspace/operationsquirrel/squirreldefender/build",
   );
   final ScrollController _logScrollController = ScrollController();
 
@@ -63,7 +63,9 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
             children: [
               TextField(
                 controller: hostController,
-                decoration: const InputDecoration(labelText: "Host (Jetson IP)"),
+                decoration: const InputDecoration(
+                  labelText: "Host (Jetson IP)",
+                ),
               ),
               TextField(
                 controller: usernameController,
@@ -156,8 +158,11 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
 
     try {
       final socket = await SSHSocket.connect(_host, _port);
-      final client =
-          SSHClient(socket, username: _username, onPasswordRequest: () => _password);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
 
       setState(() => _log = "📡 Connected — fetching params.json...");
 
@@ -187,398 +192,451 @@ class _JetsonConfigPageState extends State<JetsonConfigPage> {
   // --------------------------------------------------------------------------
   // Upload updated JSON to Jetson
   // --------------------------------------------------------------------------
-Future<void> _uploadConfig() async {
-  if (!_isSignedIn) {
-    await _showLoginDialog();
+  Future<void> _uploadConfig() async {
     if (!_isSignedIn) {
-      setState(() => _log = "❌ Sign-in required before connecting.");
-      return;
+      await _showLoginDialog();
+      if (!_isSignedIn) {
+        setState(() => _log = "❌ Sign-in required before connecting.");
+        return;
+      }
+    }
+
+    setState(() => _log = "Connecting to Jetson...");
+
+    try {
+      // Pretty-print JSON before upload
+      final parsed = jsonDecode(_controller.text);
+      final prettyJson = const JsonEncoder.withIndent('  ').convert(parsed);
+      _controller.text = prettyJson;
+
+      final socket = await SSHSocket.connect(_host, _port);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
+
+      setState(() => _log = "📡 Connected — uploading params.json...");
+
+      final sftp = await client.sftp();
+      final file = await sftp.open(
+        _squirrelDefenderParams,
+        mode:
+            SftpFileOpenMode.create |
+            SftpFileOpenMode.truncate |
+            SftpFileOpenMode.write,
+      );
+
+      final bytes = utf8.encode(prettyJson);
+      await file.writeBytes(bytes);
+      await file.close();
+
+      setState(() => _log = "✅ Upload successful! Verifying...");
+
+      final result = await client.run(
+        'ls -lh $_squirrelDefenderParams || echo "Missing file"',
+      );
+      final decoded = utf8.decode(result);
+      setState(() => _log = "✅ Done!\n\n$decoded");
+
+      sftp.close();
+      client.close();
+    } catch (e, st) {
+      debugPrint("Upload failed: $e\n$st");
+      setState(() => _log = "❌ Upload failed: $e");
     }
   }
 
-  setState(() => _log = "Connecting to Jetson...");
-
-  try {
-    // Pretty-print JSON before upload
-    final parsed = jsonDecode(_controller.text);
-    final prettyJson = const JsonEncoder.withIndent('  ').convert(parsed);
-    _controller.text = prettyJson;
-
-    final socket = await SSHSocket.connect(_host, _port);
-    final client = SSHClient(socket, username: _username, onPasswordRequest: () => _password);
-
-    setState(() => _log = "📡 Connected — uploading params.json...");
-
-    final sftp = await client.sftp();
-    final file = await sftp.open(
-      _squirrelDefenderParams,
-      mode: SftpFileOpenMode.create |
-          SftpFileOpenMode.truncate |
-          SftpFileOpenMode.write,
-    );
-
-    final bytes = utf8.encode(prettyJson);
-    await file.writeBytes(bytes);
-    await file.close();
-
-    setState(() => _log = "✅ Upload successful! Verifying...");
-
-    final result = await client.run('ls -lh $_squirrelDefenderParams || echo "Missing file"');
-    final decoded = utf8.decode(result);
-    setState(() => _log = "✅ Done!\n\n$decoded");
-
-    sftp.close();
-    client.close();
-  } catch (e, st) {
-    debugPrint("Upload failed: $e\n$st");
-    setState(() => _log = "❌ Upload failed: $e");
+  Future<bool> _confirmAction(BuildContext context, String message) async {
+    bool confirmed = false;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("⚠️ Confirm Action"),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Yes, continue"),
+          ),
+        ],
+      ),
+    ).then((value) {
+      confirmed = value ?? false;
+    });
+    return confirmed;
   }
-}
 
   // --------------------------------------------------------------------------
   // Execute command on Jetson
   // --------------------------------------------------------------------------
-Future<void> _execCommand(String cmd, {String? description}) async {
-  if (!_isSignedIn) {
-    await _showLoginDialog();
+  Future<void> _execCommand(String cmd, {String? description}) async {
     if (!_isSignedIn) {
-      setState(() => _log = "❌ Sign-in required before connecting.");
-      return;
-    }
-  }
-
-  setState(() {
-    _log = "⚙️ ${description ?? 'Running command'}...\n";
-  });
-
-  try {
-    final socket = await SSHSocket.connect(_host, _port);
-    final client = SSHClient(
-      socket,
-      username: _username,
-      onPasswordRequest: () => _password,
-    );
-
-    // --- Execute command and stream raw stdout/stderr ---
-    final session = await client.execute(cmd);
-
-    // Combine stdout + stderr as byte streams for full fidelity
-    void appendRaw(Uint8List bytes) {
-      setState(() {
-        // Append raw text — don't strip newlines or try to re-encode
-        _log += String.fromCharCodes(bytes);
-      });
-      // Auto-scroll
-      if (_logScrollController.hasClients) {
-        _logScrollController.jumpTo(
-          _logScrollController.position.maxScrollExtent,
-        );
+      await _showLoginDialog();
+      if (!_isSignedIn) {
+        setState(() => _log = "❌ Sign-in required before connecting.");
+        return;
       }
     }
 
-    session.stdout.listen(appendRaw);
-    session.stderr.listen(appendRaw);
-
-    await session.done; // Wait until the process finishes
-
     setState(() {
-      _log += "\n\n✅ Process finished.\n";
+      _log = "⚙️ ${description ?? 'Running command'}...\n";
     });
 
-    client.close();
-    socket.close();
-  } catch (e, st) {
-    debugPrint("Command failed: $e\n$st");
-    setState(() {
-      _log = "❌ Command failed: $e";
-    });
+    try {
+      final socket = await SSHSocket.connect(_host, _port);
+      final client = SSHClient(
+        socket,
+        username: _username,
+        onPasswordRequest: () => _password,
+      );
+
+      // --- Execute command and stream raw stdout/stderr ---
+      final session = await client.execute(cmd);
+
+      // Combine stdout + stderr as byte streams for full fidelity
+      void appendRaw(Uint8List bytes) {
+        setState(() {
+          // Append raw text — don't strip newlines or try to re-encode
+          _log += String.fromCharCodes(bytes);
+        });
+        // Auto-scroll
+        if (_logScrollController.hasClients) {
+          _logScrollController.jumpTo(
+            _logScrollController.position.maxScrollExtent,
+          );
+        }
+      }
+
+      session.stdout.listen(appendRaw);
+      session.stderr.listen(appendRaw);
+
+      await session.done; // Wait until the process finishes
+
+      setState(() {
+        _log += "\n\n✅ Process finished.\n";
+      });
+
+      client.close();
+      socket.close();
+    } catch (e, st) {
+      debugPrint("Command failed: $e\n$st");
+      setState(() {
+        _log = "❌ Command failed: $e";
+      });
+    }
   }
-}
-
 
   // --------------------------------------------------------------------------
   // Dynamic JSON → Form widget
   // --------------------------------------------------------------------------
-Widget _jsonFormView() {
-  Map<String, dynamic> data = {};
-  try {
-    data = jsonDecode(_controller.text);
-  } catch (_) {}
+  Widget _jsonFormView() {
+    Map<String, dynamic> data = {};
+    try {
+      data = jsonDecode(_controller.text);
+    } catch (_) {}
 
-  Widget buildForm(Map<String, dynamic> obj) {
-    return Column(
-      children: obj.entries.map((entry) {
-        final key = entry.key;
-        final value = entry.value;
+    Widget buildForm(Map<String, dynamic> obj) {
+      return Column(
+        children: obj.entries.map((entry) {
+          final key = entry.key;
+          final value = entry.value;
 
-        if (value is Map<String, dynamic>) {
-          return ExpansionTile(
-            title: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)),
-            children: [Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: buildForm(value),
-            )],
-          );
-        } else if (value is bool) {
-          return SwitchListTile(
-            title: Text(key),
-            value: value,
-            onChanged: (v) {
-              obj[key] = v;
-              _controller.text = const JsonEncoder.withIndent('  ').convert(data);
-              setState(() {});
-            },
-          );
-        } else {
-          return ListTile(
-            title: Text(key),
-            subtitle: TextField(
-              controller: TextEditingController(text: value.toString()),
+          if (value is Map<String, dynamic>) {
+            return ExpansionTile(
+              title: Text(
+                key,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: buildForm(value),
+                ),
+              ],
+            );
+          } else if (value is bool) {
+            return SwitchListTile(
+              title: Text(key),
+              value: value,
               onChanged: (v) {
-                final parsed = num.tryParse(v);
-                obj[key] = parsed ?? v;
-                _controller.text = const JsonEncoder.withIndent('  ').convert(data);
+                obj[key] = v;
+                _controller.text = const JsonEncoder.withIndent(
+                  '  ',
+                ).convert(data);
+                setState(() {});
               },
-            ),
-          );
-        }
-      }).toList(),
-    );
-  }
+            );
+          } else {
+            return ListTile(
+              title: Text(key),
+              subtitle: TextField(
+                controller: TextEditingController(text: value.toString()),
+                onChanged: (v) {
+                  final parsed = num.tryParse(v);
+                  obj[key] = parsed ?? v;
+                  _controller.text = const JsonEncoder.withIndent(
+                    '  ',
+                  ).convert(data);
+                },
+              ),
+            );
+          }
+        }).toList(),
+      );
+    }
 
-  return SingleChildScrollView(
-    child: buildForm(data),
-  );
-}
+    return SingleChildScrollView(child: buildForm(data));
+  }
 
   // --------------------------------------------------------------------------
   // Tabs
   // --------------------------------------------------------------------------
-Widget _buildJsonConfigTab() {
-  final hasParams = _controller.text.trim().isNotEmpty;
+  Widget _buildJsonConfigTab() {
+    final hasParams = _controller.text.trim().isNotEmpty;
 
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- Buttons Row ---
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _busy ? null : _downloadConfig,
-                style: _buttonStyle,
-                child: const Text("Download", textAlign: TextAlign.center),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _busy ? null : _uploadConfig,
-                style: _buttonStyle,
-                child: Text(
-                  _busy ? "Working..." : "Upload",
-                  textAlign: TextAlign.center,
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- Buttons Row ---
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _downloadConfig,
+                  style: _buttonStyle,
+                  child: const Text("Download", textAlign: TextAlign.center),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _clearCredentials,
-              style: _buttonStyle,
-              child: const Text("Sign Out", textAlign: TextAlign.center),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-        const Text(
-          "⚙️ Parameters",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-
-        // --- Scrollable Parameter Form (same height as terminal) ---
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 40),
-            child: Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(
-                minHeight: 300, // ✅ consistent with terminal height
-              ),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade400),
-              ),
-              child: hasParams
-                  ? Scrollbar(
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(8),
-                        child: _jsonFormView(),
-                      ),
-                    )
-                  : Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.download_rounded,
-                              size: 48, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text(
-                            "No parameters loaded.\nTap “Download” to fetch params.json.",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildDevContainerTab() {
-  return Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- Toggle Hotspot / Wi-Fi ---
-        ElevatedButton.icon(
-          onPressed: () => _execCommand(
-            "sudo /home/$_username/workspaces/os-dev/OperationSquirrel/scripts/toggle_osremote.sh",
-            description: "Toggling Wi-Fi / Hotspot",
-          ),
-          icon: const Icon(Icons.wifi_tethering),
-          label: const Text("Toggle Hotspot / Wi-Fi", textAlign: TextAlign.center),
-          style: _buttonStyle.copyWith(
-            backgroundColor: WidgetStateProperty.all(Colors.indigoAccent),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-        const Divider(),
-
-        // --- Top Buttons ---
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
-                  description: "Starting Dev Container",
-                ),
-                style: _buttonStyle,
-                child: const Text("Start Dev", textAlign: TextAlign.center),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker stop squirreldefender-dev",
-                  description: "Stopping Dev Container",
-                ),
-                style: _buttonStyle,
-                child: const Text("Stop Dev", textAlign: TextAlign.center),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker rm -f squirreldefender-dev || true && docker system prune -f",
-                  description: "Deleting Dev Container",
-                ),
-                style: _buttonStyle,
-                child: const Text("Del Dev", textAlign: TextAlign.center),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
-        // --- Run / Stop EXE Buttons ---
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker exec -i squirreldefender-dev bash -c 'cd /workspace/OperationSquirrel/SquirrelDefender/build && ./squirreldefender'",
-                  description: "Run SquirrelDefender",
-                ),
-                style: _buttonStyle,
-                child: const Text("Run EXE", textAlign: TextAlign.center),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () => _execCommand(
-                  "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
-                  description: "Stop SquirrelDefender",
-                ),
-                style: _buttonStyle,
-                child: const Text("Stop EXE", textAlign: TextAlign.center),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-        const Text(
-          "🖥️ Output / Terminal",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-
-        // --- Stable Full-Width Terminal ---
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 40),
-            child: Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(
-                minHeight: 300,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade700),
-              ),
-              padding: const EdgeInsets.all(8),
-              child: Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: _logScrollController,
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _busy ? null : _uploadConfig,
+                  style: _buttonStyle,
                   child: Text(
-                    _log.isEmpty
-                        ? "No output yet.\nTap “Run EXE” to begin..."
-                        : _log,
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontFamily: "monospace",
-                      fontSize: 13,
+                    _busy ? "Working..." : "Upload",
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _clearCredentials,
+                style: _buttonStyle,
+                child: const Text("Sign Out", textAlign: TextAlign.center),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          const Text(
+            "⚙️ Parameters",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+
+          // --- Scrollable Parameter Form (same height as terminal) ---
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 40),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(
+                  minHeight: 300, // ✅ consistent with terminal height
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade400),
+                ),
+                child: hasParams
+                    ? Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(8),
+                          child: _jsonFormView(),
+                        ),
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.download_rounded,
+                              size: 48,
+                              color: Colors.grey,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              "No parameters loaded.\nTap “Download” to fetch params.json.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevContainerTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- Top Buttons ---
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "bash -c '$_operationSquirrelPath/run.sh dev orin osremote'",
+                    description: "Starting Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Start Dev", textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker stop squirreldefender-dev",
+                    description: "Stopping Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Stop Dev", textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker rm -f squirreldefender-dev || true && docker system prune -f",
+                    description: "Deleting Dev Container",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Del Dev", textAlign: TextAlign.center),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // --- Run / Stop / Delete Data Buttons ---
+          Row(
+            children: [
+              // Run EXE
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker exec -i squirreldefender-dev bash -c 'cd /workspace/operationsquirrel/squirreldefender/build && ./squirreldefender'",
+                    description: "Run squirreldefender",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Run EXE", textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Stop EXE
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _execCommand(
+                    "docker exec squirreldefender-dev pkill -2 -f squirreldefender",
+                    description: "Stop squirreldefender",
+                  ),
+                  style: _buttonStyle,
+                  child: const Text("Stop EXE", textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Delete Data Folder
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final confirmed = await _confirmAction(
+                      context,
+                      "Are you sure you want to delete **all files** in the data folder?\n\n"
+                      "Path: /home/$_username/workspaces/os-dev/operationsquirrel/data\n"
+                      "This cannot be undone.",
+                    );
+                    if (confirmed) {
+                      await _execCommand(
+                        "rm -rf /home/$_username/workspaces/os-dev/operationsquirrel/squirreldefender/data/*",
+                        description: "Deleting Data Folder Contents",
+                      );
+                    } else {
+                      setState(() => _log = "❌ Data deletion cancelled.");
+                    }
+                  },
+                  icon: const Icon(Icons.delete_forever),
+                  label: const Text("Del Data", textAlign: TextAlign.center),
+                  style: _buttonStyle.copyWith(
+                    backgroundColor: WidgetStateProperty.all(Colors.redAccent),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          const Text(
+            "🖥️ Output / Terminal",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+
+          // --- Stable Full-Width Terminal ---
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 40),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 300),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade700),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _logScrollController,
+                    child: Text(
+                      _log.isEmpty
+                          ? "No output yet.\nTap “Run EXE” to begin..."
+                          : _log,
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
-
+        ],
+      ),
+    );
+  }
 
   // --------------------------------------------------------------------------
   // UI
