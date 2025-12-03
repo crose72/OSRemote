@@ -7,8 +7,48 @@ import 'package:flutter/material.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'dart:typed_data';
 
+// Operation Squirrel Brand Colors
+const Color osGreen = Color(0xFF3AD29F);
+const Color osGreenDark = Color(0xFF2AB98A);
+
 void main() {
-  runApp(const MaterialApp(home: JetsonConfigPage()));
+  runApp(const OSRemoteApp());
+}
+
+class OSRemoteApp extends StatelessWidget {
+  const OSRemoteApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'OSRemote',
+      theme: ThemeData(
+        scaffoldBackgroundColor: osGreen,  // main background
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: osGreen,
+          primary: osGreen,
+          secondary: osGreenDark,
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.black,  // your website's black navbar
+          foregroundColor: Colors.white,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: osGreenDark,
+            foregroundColor: Colors.white,
+          ),
+        ),
+          tabBarTheme: const TabBarThemeData(
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+        ),
+      ),
+      home: const JetsonConfigPage(),
+    );
+  }
 }
 
 class JetsonConfigPage extends StatefulWidget {
